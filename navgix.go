@@ -6,10 +6,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/cristalhq/acmd"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -21,6 +18,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/cristalhq/acmd"
 )
 
 var concurrentSites = 5
@@ -157,7 +157,8 @@ func MakeFolderEndpointsFromPath(path string) []string {
 		// get path
 		u, err := url.Parse(path)
 		if err != nil {
-			log.Fatal(err)
+			Log(fmt.Sprintf("Error in MakeFolderEndpointsFromPath while parsing URL: %v", err))
+			return endpoints
 		}
 		path = u.Path
 		if strings.HasPrefix(path, "/") {
@@ -195,7 +196,8 @@ func findEndpoints(url string) []string {
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		log.Fatal(err)
+		Log(fmt.Sprintf("Error in findEndpoints while creating new document: %v", err))
+		return []string{}
 	}
 	var foundEndpoints []string
 	doc.Find("*").Each(func(i int, s *goquery.Selection) {
@@ -288,7 +290,8 @@ func main() {
 					// file exists
 					file, err := os.Open(URLInput)
 					if err != nil {
-						log.Fatal(err)
+						Log(fmt.Sprintf("Error in main while opening file: %v", err))
+						return nil
 					}
 					defer file.Close()
 
@@ -299,7 +302,8 @@ func main() {
 					}
 
 					if err := scanner.Err(); err != nil {
-						log.Fatal(err)
+						Log(fmt.Sprintf("Error in main while scanning file: %v", err))
+						return nil
 					}
 					var wg sync.WaitGroup
 					semaphore := make(chan struct{}, threads)
