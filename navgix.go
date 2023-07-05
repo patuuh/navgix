@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -23,8 +24,12 @@ import (
 	"github.com/cristalhq/acmd"
 )
 
-var concurrentSites = 5
-var threads = 5
+var (
+	concurrentSites = 5
+	threads         = 5
+	verbose         bool
+	logFileName     string
+)
 
 func RandomString(length int) string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -36,9 +41,30 @@ func RandomString(length int) string {
 }
 
 func Log(msg string, a ...interface{}) {
-	timestamp := time.Now().Format("2006-01-02_15:04:05.000000000")
+	timestamp := time.Now().Format("2006-01-02_15:04:05.000000")
+	finalMsg := fmt.Sprintf("[navgix "+timestamp+"] "+msg+"\n", a...)
 
-	fmt.Printf("[navgix "+timestamp+"] "+msg+"\n", a...)
+	// If the message is about a vulnerability, write it to a file
+	if strings.HasPrefix(msg, "Vulnerable:") {
+		directory := filepath.Dir(logFileName)
+		os.MkdirAll(directory, os.ModePerm) // Ensure the directory exists
+		f, err := os.OpenFile(logFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Println("Error opening or creating file:", err)
+			return
+		}
+		if _, err := f.WriteString(finalMsg); err != nil {
+			fmt.Println("Error writing to file:", err)
+			f.Close()
+			return
+		}
+		if err := f.Close(); err != nil {
+			fmt.Println("Error closing file:", err)
+			return
+		}
+	}
+
+	fmt.Print(finalMsg)
 }
 
 func InSlice(slice []string, word string) bool {
@@ -77,6 +103,9 @@ func MakeGET(url string) (string, int, string) {
 
 func MakeGETRetry(url string) (string, int, string) {
 	retry := 2
+	if verbose {
+		fmt.Println("Sent GET request to: ", url)
+	}
 	for i := 0; i < retry; i++ {
 		body, status, location := MakeGET(url)
 		if status != 9999 {
@@ -258,6 +287,8 @@ func main() {
 		}
 	}()
 
+	logFileName = "reports/" + time.Now().Format("Jan02_1504") + "/navgix.txt"
+
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	cmds := []acmd.Command{
 		{
@@ -269,6 +300,7 @@ func main() {
 				fs.StringVar(&URLInput, "u", "", "Single URL or file containing URLs to scan")
 				fs.IntVar(&threads, "t", 10, "Number of threads to use for each site")
 				fs.IntVar(&concurrentSites, "c", 20, "Number of concurrent sites to scan")
+				fs.BoolVar(&verbose, "verbose", false, "If true, print out all URLs when a GET request is sent")
 
 				if err := fs.Parse(args); err != nil {
 					return err
